@@ -1,0 +1,73 @@
+INPUT: [circuit = {before, measure, branch, after}], THRESHOLD
+
+// Circuit Mode
+// Temporary Circuits
+circuit_duplicate = circuit.insert(barrier, before)
+circuit_direct = circuit_duplicate.remove(measure, branch)
+
+// Convert to DAG
+circuit -> dag 
+circuit_duplicate -> dag_duplicate
+circuit_direct -> dag_direct
+
+// DAG Mode
+[dag = {before, measure, branch, after}]
+
+// Find edges from measure to barrier
+dependencies = []
+for each edge in dag_duplicate[measure]:
+    if edge.target == barrier:
+        dependencies.append(edge.register)
+
+// Find nodes in dag_direct which are in dependencies (after barrier)
+nodes = []
+// Start bfs/dfs from barrier
+start = barrier
+worklist = [(start, 0)]
+while worklist:
+    for each edge in out_edges(worklist.top):
+        if edge.register in dependencies:
+            nodes.append(edge.source, edge.target)
+            dag_direct.remove(edge.source, edge.target)
+        else if worklist.top[1] > THRESHOLD:
+            nodes.append(edge.source, edge.target)
+            dag_direct.remove(edge.source, edge.target)
+        else:
+            worklist.append((edge.target, worklist.top[1] + 1))
+// Remove nodes with 0 in-degree
+for each node in dag_direct:
+    if in_deg(node) == 0:
+        dag_direct.remove(node)
+        nodes.append(node)
+
+// Dag after
+dag_after = dag.copy(dag_direct)
+dag_after.delete(barrier.ancestors)
+dag_after.delete(barrier)
+
+// Dag before
+dag_before = dag.copy(dag_direct)
+dag_before.delete(barrier.descendants)
+dag_before.delete(barrier)
+
+// Dag after-after
+dag_after_after = new dag(nodes)
+for each edge in dag_after:
+    if edge.source and edge.target in nodes:
+        dag_after_after.add(edge.source, edge.target)
+dag_after_after.delete(barrier)
+
+// Back to Circuit
+dag_after -> after
+dag_before -> before
+dag_after_after -> after_after
+branch = circuit[branch]
+
+// New Circuit
+final_circuit = circuit()
+final_circuit.add(optimize(before, after))
+final_circuit.add(measure)
+final_circuit.add(make_branch(optimize(after.inv, branch)))
+final_circuit.add(after_after)
+
+return final_circuit
